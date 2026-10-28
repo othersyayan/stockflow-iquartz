@@ -73,6 +73,7 @@ func main() {
 	})
 
 	mux.HandleFunc("/api/products", productHandler.HandleProducts)
+	mux.HandleFunc("/api/products/", productHandler.HandleProductById)
 
 	handler := corsMiddleware(mux)
 

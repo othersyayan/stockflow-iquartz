@@ -10,7 +10,6 @@ import (
 var (
 	ErrNotFound          = errors.New("PRODUCT_NOT_FOUND")
 	ErrProductHasHistory = errors.New("PRODUCT_HAS_HISTORY")
-	ErrInsufficientStock = errors.New("INSUFFICIENT_STOCK")
 )
 
 type ProductRepository struct {
@@ -63,4 +62,47 @@ func (r *ProductRepository) GetProducts(search string, page, limit int) ([]model
 	}
 
 	return products, total, nil
+}
+
+func (r *ProductRepository) CreateProduct(req models.CreateProductReq) (*models.Product, error) {
+	query := `
+		INSERT INTO products (sku, name, price)
+		VALUES ($1, $2, $3)
+		RETURNING id, sku, name, price, stock, is_active, created_at
+	`
+	var p models.Product
+	err := r.db.QueryRow(query, req.SKU, req.Name, req.Price).Scan(
+		&p.ID, &p.SKU, &p.Name, &p.Price, &p.Stock, &p.IsActive, &p.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+func (r *ProductRepository) DeleteProduct(id int) error {
+	var count int
+	checkQuery := `SELECT COUNT(*) FROM stock_movements WHERE product_id = $1`
+
+	err := r.db.QueryRow(checkQuery, id).Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	if count > 0 {
+		return ErrProductHasHistory
+	}
+
+	res, err := r.db.Exec(`DELETE FROM products WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, _ := res.RowsAffected()
+
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
+	return nil
 }
