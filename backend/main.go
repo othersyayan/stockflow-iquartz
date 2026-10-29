@@ -64,6 +64,10 @@ func main() {
 	productService := services.NewProductService(productRepo)
 	productHandler := handlers.NewProductHandler(productService)
 
+	orderRepo := repositories.NewOrderRepository(db)
+	orderService := services.NewOrderService(orderRepo)
+	orderHandler := handlers.NewOrderHandler(orderService)
+
 	mux.HandleFunc("/health", func(w netHttp.ResponseWriter, r *netHttp.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{
@@ -76,6 +80,10 @@ func main() {
 	mux.HandleFunc("/api/products/{id}", productHandler.HandleProductById)
 	mux.HandleFunc("/api/products/{id}/stock", productHandler.AdjustStock)
 	mux.HandleFunc("/api/products/{id}/movements", productHandler.GetMovements)
+
+	mux.HandleFunc("/api/orders", orderHandler.HandleOrders)
+	mux.HandleFunc("/api/orders/{id}", orderHandler.HandleOrderById)
+	mux.HandleFunc("/api/orders/{id}/cancel", orderHandler.CancelOrder)
 
 	handler := corsMiddleware(mux)
 

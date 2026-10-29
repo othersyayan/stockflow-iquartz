@@ -27,7 +27,11 @@ func (h *ProductHandler) HandleProducts(w http.ResponseWriter, r *http.Request) 
 	case http.MethodPost:
 		h.CreateProduct(w, r)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error: models.ErrorDetail{Code: "METHOD_NOT_ALLOWED", Message: "Method not allowed"},
+		})
 	}
 }
 
@@ -42,7 +46,11 @@ func (h *ProductHandler) HandleProductById(w http.ResponseWriter, r *http.Reques
 	case http.MethodGet:
 		h.GetMovements(w, r)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error: models.ErrorDetail{Code: "METHOD_NOT_ALLOWED", Message: "Method not allowed"},
+		})
 	}
 }
 
@@ -110,8 +118,6 @@ func (h *ProductHandler) CreateProduct(w http.ResponseWriter, r *http.Request) {
 
 func (h *ProductHandler) DeleteProduct(w http.ResponseWriter, r *http.Request) {
 	productId := r.PathValue("id")
-
-	fmt.Println("productId", productId)
 
 	if productId == "" {
 		w.Header().Set("Content-Type", "application/json")
