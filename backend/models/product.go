@@ -24,3 +24,9 @@ type AdjustStockReq struct {
 	Qty  int    `json:"qty"`
 	Note string `json:"note"`
 }
+
+type UpdateProductReq struct {
+	Name     *string `json:"name"`
+	Price    *int    `json:"price"`
+	IsActive *bool   `json:"is_active"`
+}

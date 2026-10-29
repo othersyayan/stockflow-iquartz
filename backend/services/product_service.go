@@ -1,15 +1,8 @@
 package services
 
 import (
-	"errors"
-
 	"backend/models"
 	"backend/repositories"
-)
-
-var (
-	ErrInvalidRequest = errors.New("INVALID_REQUEST")
-	ErrDuplicateSKU   = errors.New("DUPLICATE_SKU")
 )
 
 type ProductService struct {
@@ -25,19 +18,31 @@ func (s *ProductService) GetProducts(search string, page, limit int) ([]models.P
 }
 
 func (s *ProductService) CreateProduct(req models.CreateProductReq) (*models.Product, error) {
-	if req.Name == "" || req.Price <= 0 {
-		return nil, ErrInvalidRequest
-	}
-
 	products, _, err := s.productRepo.GetProducts(req.SKU, 1, 1)
 	if err == nil && len(products) > 0 {
-		return nil, ErrDuplicateSKU
+		return nil, repositories.ErrDuplicateSKU
 	}
+
 	return s.productRepo.CreateProduct(req)
 }
 
 func (s *ProductService) DeleteProduct(id int) error {
-	err := s.productRepo.DeleteProduct(id)
+	return s.productRepo.DeleteProduct(id)
+}
 
-	return err
+func (s *ProductService) UpdateProduct(id int, req models.UpdateProductReq) (*models.Product, error) {
+	return s.productRepo.UpdateProduct(id, req)
+}
+
+func (s *ProductService) AdjustStock(id int, req models.AdjustStockReq) (*models.Product, error) {
+	product, err := s.productRepo.AdjustStock(id, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return product, nil
+}
+
+func (s *ProductService) GetMovements(id int) ([]models.StockMovement, error) {
+	return s.productRepo.GetMovements(id)
 }

@@ -73,7 +73,9 @@ func main() {
 	})
 
 	mux.HandleFunc("/api/products", productHandler.HandleProducts)
-	mux.HandleFunc("/api/products/", productHandler.HandleProductById)
+	mux.HandleFunc("/api/products/{id}", productHandler.HandleProductById)
+	mux.HandleFunc("/api/products/{id}/stock", productHandler.AdjustStock)
+	mux.HandleFunc("/api/products/{id}/movements", productHandler.GetMovements)
 
 	handler := corsMiddleware(mux)
 

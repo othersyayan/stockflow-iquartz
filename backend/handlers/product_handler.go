@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -34,6 +35,12 @@ func (h *ProductHandler) HandleProductById(w http.ResponseWriter, r *http.Reques
 	switch r.Method {
 	case http.MethodDelete:
 		h.DeleteProduct(w, r)
+	case http.MethodPut:
+		h.UpdateProduct(w, r)
+	case http.MethodPost:
+		h.AdjustStock(w, r)
+	case http.MethodGet:
+		h.GetMovements(w, r)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -67,8 +74,13 @@ func (h *ProductHandler) GetProducts(w http.ResponseWriter, r *http.Request) {
 
 func (h *ProductHandler) CreateProduct(w http.ResponseWriter, r *http.Request) {
 	var req models.CreateProductReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid payload", http.StatusBadRequest)
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error: models.ErrorDetail{Code: "VALIDATION_ERROR", Message: "Invalid payload"},
+		})
 		return
 	}
 
@@ -97,17 +109,27 @@ func (h *ProductHandler) CreateProduct(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ProductHandler) DeleteProduct(w http.ResponseWriter, r *http.Request) {
-	productId := strings.TrimPrefix(r.URL.Path, "/api/products/")
+	productId := r.PathValue("id")
+
+	fmt.Println("productId", productId)
 
 	if productId == "" {
-		http.Error(w, "Product ID is required", http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error: models.ErrorDetail{Code: "VALIDATION_ERROR", Message: "Product ID is required"},
+		})
 		return
 	}
 
 	id, errId := strconv.Atoi(productId)
 
 	if errId != nil {
-		http.Error(w, "Invalid Product ID", http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error: models.ErrorDetail{Code: "VALIDATION_ERROR", Message: "Invalid Product ID"},
+		})
 		return
 	}
 
@@ -126,7 +148,7 @@ func (h *ProductHandler) DeleteProduct(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusConflict)
 		json.NewEncoder(w).Encode(models.ErrorResponse{
-			Error: models.ErrorDetail{Code: "PRODUCT_HAS_HISTORY"},
+			Error: models.ErrorDetail{Code: "PRODUCT_HAS_HISTORY", Message: "Product already has history movement"},
 		})
 		return
 	}
@@ -138,4 +160,148 @@ func (h *ProductHandler) DeleteProduct(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *ProductHandler) UpdateProduct(w http.ResponseWriter, r *http.Request) {
+	productId := r.PathValue("id")
+
+	if productId == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error: models.ErrorDetail{Code: "VALIDATION_ERROR", Message: "Product ID is required"},
+		})
+		return
+	}
+
+	id, errId := strconv.Atoi(productId)
+
+	if errId != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error: models.ErrorDetail{Code: "VALIDATION_ERROR", Message: "Invalid Product ID"},
+		})
+		return
+	}
+
+	var req models.UpdateProductReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error: models.ErrorDetail{Code: "VALIDATION_ERROR", Message: "Invalid payload"},
+		})
+		return
+	}
+
+	p, err := h.service.UpdateProduct(id, req)
+	if err == repositories.ErrNotFound {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error: models.ErrorDetail{Code: "PRODUCT_NOT_FOUND", Message: "Product not found"},
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(p)
+}
+
+func (h *ProductHandler) AdjustStock(w http.ResponseWriter, r *http.Request) {
+	productId := r.PathValue("id")
+
+	if productId == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error: models.ErrorDetail{Code: "VALIDATION_ERROR", Message: "Product ID is required"},
+		})
+		return
+	}
+
+	id, errId := strconv.Atoi(productId)
+
+	if errId != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error: models.ErrorDetail{Code: "VALIDATION_ERROR", Message: "Invalid Product ID"},
+		})
+		return
+	}
+
+	var req models.AdjustStockReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || (req.Type != "in" && req.Type != "out") || req.Qty <= 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error: models.ErrorDetail{Code: "VALIDATION_ERROR", Message: "Invalid stock payload"},
+		})
+		return
+	}
+
+	p, err := h.service.AdjustStock(id, req)
+	if err == repositories.ErrNotFound {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error: models.ErrorDetail{Code: "PRODUCT_NOT_FOUND", Message: "Product not found"},
+		})
+		return
+	}
+	if err != nil && strings.Contains(err.Error(), "INSUFFICIENT_STOCK") {
+		var available int
+		fmt.Sscanf(err.Error(), "INSUFFICIENT_STOCK: available %d", &available)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error: models.ErrorDetail{Code: "INSUFFICIENT_STOCK", Available: &available},
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(p)
+}
+
+func (h *ProductHandler) GetMovements(w http.ResponseWriter, r *http.Request) {
+	productId := r.PathValue("id")
+
+	if productId == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error: models.ErrorDetail{Code: "VALIDATION_ERROR", Message: "Product ID is required"},
+		})
+		return
+	}
+
+	id, errId := strconv.Atoi(productId)
+
+	if errId != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error: models.ErrorDetail{Code: "VALIDATION_ERROR", Message: "Invalid Product ID"},
+		})
+		return
+	}
+
+	m, err := h.service.GetMovements(id)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error: models.ErrorDetail{Code: "INTERNAL_SERVER_ERROR"},
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"data": m,
+	})
 }
